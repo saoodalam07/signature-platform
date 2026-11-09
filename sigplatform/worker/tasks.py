@@ -12,6 +12,17 @@ from ..ml.models import cosine, models
 from ..queue import celery_app
 from ..storage import get_storage
 
+import logfire
+from celery.signals import worker_process_init
+
+
+@worker_process_init.connect
+def _init_logfire(**kwargs):
+    # Start Logfire inside each Celery worker process
+    logfire.configure(service_name="signature-worker", send_to_logfire="if-token-present")
+    logfire.instrument_celery()
+    logfire.instrument_system_metrics()
+
 
 def _jpeg_b64(img, side=320):
     img = img.copy()
@@ -25,8 +36,9 @@ def _detect_pages(pages, threshold):
     version, det = models.get("detector")
     out = []
     for page in pages:
-        dets = det(page, threshold)
-        out.append({"width": page.width, "height": page.height,
+            with logfire.span("detect_page"):
+                dets = det(page, threshold)
+            out.append({"width": page.width, "height": page.height,
                     "detections": [{"box": [round(v, 1) for v in d[:4]], "confidence": round(d[4], 4)}
                                    for d in dets]})
     return version, out
@@ -43,7 +55,8 @@ def _read_and_delete(key):
 @celery_app.task(name="sigplatform.worker.tasks.detect")
 def detect(doc_key, threshold=None):
     t0 = time.perf_counter()
-    pages = load_pages(_read_and_delete(doc_key))
+    with logfire.span("load_pages"):
+        pages = load_pages(_read_and_delete(doc_key))
     version, result = _detect_pages(pages, threshold or settings.detect_threshold)
     return {"type": "detect", "model_version": version, "pages": result,
             "ms": round((time.perf_counter() - t0) * 1000, 1)}
@@ -70,7 +83,8 @@ def verify(doc_key, reference_key, threshold=None):
     """Detect every signature in a document and compare each with a reference signature."""
     from PIL import Image
     t0 = time.perf_counter()
-    pages = load_pages(_read_and_delete(doc_key))
+    with logfire.span("load_pages"):
+        pages = load_pages(_read_and_delete(doc_key))
     ref = Image.open(io.BytesIO(_read_and_delete(reference_key))).convert("RGB")
     det_version, result = _detect_pages(pages, threshold or settings.detect_threshold)
 
@@ -84,7 +98,8 @@ def verify(doc_key, reference_key, threshold=None):
     thr = float(models.tags.get("similarity", {}).get("match_threshold", settings.match_threshold))
     best = None
     if crops:
-        vecs = emb.embed([ref] + crops)
+        with logfire.span("embed", n_crops=len(crops)):
+            vecs = emb.embed([ref] + crops)
         for (pi, di), c, v in zip(where, crops, vecs[1:]):
             s = round(cosine(vecs[0], v), 4)
             d = result[pi]["detections"][di]

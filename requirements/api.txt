@@ -5,3 +5,5 @@ python-multipart>=0.0.9
 celery[redis,sqs]>=5.4
 boto3>=1.34
 mlflow-skinny>=2.16
+logfire[fastapi,system-metrics]
+logfire[fastapi,system-metrics]

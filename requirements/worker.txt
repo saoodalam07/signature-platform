@@ -7,3 +7,5 @@ pypdfium2>=4.30         # PDF rendering, Apache-2.0/BSD-3 (PyMuPDF is AGPL: not 
 pillow>=10
 numpy
 mlflow-skinny>=2.16
+logfire[celery,system-metrics]
+logfire[celery,system-metrics]

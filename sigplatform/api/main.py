@@ -14,6 +14,7 @@ Endpoints
 """
 import hmac
 import logging
+import logfire
 
 from celery.result import AsyncResult
 from fastapi import FastAPI, File, Header, HTTPException, Request, UploadFile
@@ -24,6 +25,9 @@ from ..storage import get_storage
 
 log = logging.getLogger("api")
 app = FastAPI(title="Signature Platform API", version="1.0.0")
+logfire.configure(service_name="signature-api", send_to_logfire="if-token-present")
+logfire.instrument_fastapi(app)
+logfire.instrument_system_metrics()
 
 ALLOWED = {b"%PDF": ".pdf", b"\x89PNG": ".png", b"\xff\xd8\xff": ".jpg"}
 
