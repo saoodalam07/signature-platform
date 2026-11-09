@@ -1,0 +1,7 @@
+# API: no torch, no model code
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-multipart>=0.0.9
+celery[redis,sqs]>=5.4
+boto3>=1.34
+mlflow-skinny>=2.16

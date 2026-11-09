@@ -1,0 +1,45 @@
+# AWS (single EC2 instance) - run from the project root on the server:
+#   docker compose -f deploy/aws/docker-compose.aws.yml --env-file deploy/aws/aws.env up -d --build
+#
+#   caddy   :80/:443  HTTPS in front of the API (free Let's Encrypt certificate via sslip.io)
+#   api               FastAPI
+#   worker            inference worker (CPU; m7i-flex.large on the Free plan)
+#   valkey            job results only (the queues are Amazon SQS)
+#   mlflow  :5000     tracking + model registry (localhost only; laptop reaches it through an SSH tunnel)
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment: [ "DOMAIN=${DOMAIN}" ]
+    volumes: [ "./Caddyfile:/etc/caddy/Caddyfile:ro", "caddy_data:/data" ]
+    depends_on: [api]
+
+  api:
+    build: { context: ../.., dockerfile: docker/api.Dockerfile }
+    restart: unless-stopped
+    env_file: aws.env
+    depends_on: [valkey, mlflow]
+
+  worker:
+    build: { context: ../.., dockerfile: docker/worker.Dockerfile }
+    restart: unless-stopped
+    env_file: aws.env
+    volumes: [ "models:/models", "hf_cache:/root/.cache/huggingface" ]
+    depends_on: [valkey, mlflow]
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    restart: unless-stopped
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v3.1.0
+    restart: unless-stopped
+    command: >
+      mlflow server --host 0.0.0.0 --port 5000
+      --backend-store-uri sqlite:////mlflow/mlflow.db
+      --artifacts-destination /mlflow/artifacts --serve-artifacts
+    ports: ["127.0.0.1:5000:5000"]   # only via SSH tunnel from the laptop
+    volumes: [ "mlflow:/mlflow" ]
+
+volumes: { caddy_data: {}, models: {}, hf_cache: {}, mlflow: {} }

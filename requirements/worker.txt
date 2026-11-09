@@ -1,0 +1,9 @@
+# Inference worker (install the CUDA build of torch first on GPU hosts)
+celery[redis,sqs]>=5.4
+boto3>=1.34
+rfdetr>=1.12            # Apache-2.0 (do NOT install rfdetr[plus] = PML licence)
+transformers>=5.1       # DINOv2 (Apache-2.0)
+pypdfium2>=4.30         # PDF rendering, Apache-2.0/BSD-3 (PyMuPDF is AGPL: not used)
+pillow>=10
+numpy
+mlflow-skinny>=2.16

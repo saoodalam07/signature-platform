@@ -1,0 +1,10 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    { "Sid": "TrainingQueueOnly", "Effect": "Allow",
+      "Action": ["sqs:GetQueueUrl", "sqs:GetQueueAttributes", "sqs:ReceiveMessage", "sqs:DeleteMessage",
+                 "sqs:ChangeMessageVisibility", "sqs:CreateQueue", "sqs:SendMessage"],
+      "Resource": "arn:aws:sqs:*:*:sigplatform-*" },
+    { "Sid": "ListQueues", "Effect": "Allow", "Action": "sqs:ListQueues", "Resource": "*" }
+  ]
+}

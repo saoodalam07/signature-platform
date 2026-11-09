@@ -1,0 +1,52 @@
+# Full stack on one machine:  docker compose up -d --build
+# GPU trainer (needs NVIDIA Container Toolkit): docker compose --profile gpu up -d trainer
+#
+#   api      :8000  FastAPI (public)
+#   worker          inference worker (queue: inference)
+#   trainer         remote training worker (queue: training, GPU)
+#   valkey   :6379  message broker + job results (BSD, Redis-compatible)
+#   mlflow   :5000  experiment tracking + model registry
+services:
+  valkey:
+    image: valkey/valkey:8-alpine
+    restart: unless-stopped
+    ports: ["6379:6379"]
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v3.1.0
+    restart: unless-stopped
+    command: >
+      mlflow server --host 0.0.0.0 --port 5000
+      --backend-store-uri sqlite:////mlflow/mlflow.db
+      --artifacts-destination /mlflow/artifacts --serve-artifacts
+    ports: ["5000:5000"]
+    volumes: [mlflow:/mlflow]
+
+  api:
+    build: { context: ., dockerfile: docker/api.Dockerfile }
+    restart: unless-stopped
+    env_file: .env
+    ports: ["8000:8000"]
+    volumes: [uploads:/data/uploads]
+    depends_on: [valkey, mlflow]
+
+  worker:
+    build: { context: ., dockerfile: docker/worker.Dockerfile }
+    restart: unless-stopped
+    env_file: .env
+    volumes: [uploads:/data/uploads, models:/models, hf_cache:/root/.cache/huggingface]
+    depends_on: [valkey, mlflow]
+    # GPU inference: uncomment
+    # deploy: { resources: { reservations: { devices: [{ driver: nvidia, count: 1, capabilities: [gpu] }] } } }
+
+  trainer:
+    profiles: ["gpu"]
+    build: { context: ., dockerfile: docker/trainer.Dockerfile }
+    restart: unless-stopped
+    env_file: .env
+    shm_size: "8gb"
+    volumes: [work:/work, hf_cache:/root/.cache/huggingface]
+    depends_on: [valkey, mlflow]
+    deploy: { resources: { reservations: { devices: [{ driver: nvidia, count: 1, capabilities: [gpu] }] } } }
+
+volumes: { uploads: {}, models: {}, mlflow: {}, work: {}, hf_cache: {} }

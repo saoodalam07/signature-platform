@@ -1,0 +1,39 @@
+# Python / venv
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Secrets - never commit
+.env
+deploy/aws/aws.env
+*.pem
+*accessKeys*.csv
+*credentials*.csv
+
+# Models - live in the MLflow registry / S3, never in git
+*.pth
+*.pt
+*.onnx
+*.ckpt
+*.safetensors
+runs_rfdetr/
+runs/
+mlartifacts/
+mlruns/
+mlflow.db*
+
+# Data - NETSOL confidential, lives in the private Hugging Face dataset repo
+signature_dataset*/
+merged_signature_dataset*/
+sp_data/
+datasets/
+*.zip
+*.tgz
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
