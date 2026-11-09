@@ -36,7 +36,7 @@ def eager_send(name, *args):
     return celery_app.tasks[name].apply(args=list(args))
 
 
-api._send = lambda name, *a: eager_send(f"sigplatform.{name}", *a)
+api._send = lambda name, *a, **opts: eager_send(f"sigplatform.{name}", *a)
 client = TestClient(api.app)
 
 

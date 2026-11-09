@@ -49,7 +49,6 @@ EC2 → **Launch instance**:
   - SSH 22 → **My IP**
   - HTTP 80 → Anywhere
   - HTTPS 443 → Anywhere
-  - Custom TCP 5000 (MLflow) → **My IP**
 - Storage **40 GB gp3**
 - Advanced → **IAM instance profile** → `sigplatform-ec2-role`
 - Launch. Optional: **Elastic IP** → allocate → associate, so the address does not change on stop/start.
@@ -76,10 +75,14 @@ docker compose -f deploy/aws/docker-compose.aws.yml logs -f worker
 ```
 
 ## 8. Put your trained model (v1) into the cloud MLflow (laptop CMD)
+MLflow is not open to the internet. Open an SSH tunnel first and keep that window open:
+```
+ssh -o ServerAliveInterval=30 -i sigplatform-key.pem -N -L 5000:localhost:5000 ubuntu@<EC2-IP>
+```
 ```
 cd C:\Users\DELL\Desktop\signature_project\signature-platform
 venv\Scripts\activate.bat
-set MLFLOW_TRACKING_URI=http://<EC2-IP>:5000
+set MLFLOW_TRACKING_URI=http://localhost:5000
 python -m training.register_existing --weights runs_rfdetr\signature_rfdetr_large\checkpoint_best_total.pth --map50 0.9649 --map50-95 0.7344 --resolution 576
 ```
 
@@ -94,7 +97,7 @@ set AWS_REGION=ap-southeast-2
 set AWS_DEFAULT_REGION=ap-southeast-2
 set BROKER_URL=sqs://
 set RESULT_BACKEND=disabled
-set MLFLOW_TRACKING_URI=http://<EC2-IP>:5000
+set MLFLOW_TRACKING_URI=http://localhost:5000
 set HF_TOKEN=<read token>
 set TRAIN_WORK_DIR=C:\Users\DELL\Desktop\signature_project\sp_data\work
 python -m celery -A sigplatform.queue worker -Q training --pool=solo --loglevel=info

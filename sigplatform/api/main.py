@@ -40,9 +40,9 @@ async def _store(f: UploadFile) -> str:
     return get_storage().put(data, suffix)
 
 
-def _send(name, *args):
+def _send(name, *args, **options):
     # by name: the API image does not need torch or any model code
-    return celery_app.send_task(f"sigplatform.{name}", args=list(args))
+    return celery_app.send_task(f"sigplatform.{name}", args=list(args), **options)
 
 
 def _queued(task):
@@ -89,9 +89,28 @@ async def huggingface_webhook(request: Request, x_webhook_secret: str | None = H
         return {"status": "ignored", "reason": "not a dataset content update"}
     if settings.hf_dataset_repo and repo.get("name") != settings.hf_dataset_repo:
         return {"status": "ignored", "reason": f"repo {repo.get('name')} is not watched"}
-    task = _send("trainer.tasks.train_on_new_data", repo.get("name"), repo.get("headSha"))
-    log.info("Training job %s queued for %s@%s", task.id, repo.get("name"), repo.get("headSha"))
-    return {"status": "training_queued", "job_id": task.id, "revision": repo.get("headSha")}
+    # A large upload arrives as several commits = several webhooks. Queue ONE job, delayed a little,
+    # that trains on the latest revision; ignore further webhooks while that job is pending.
+    if not _claim_training_slot():
+        return {"status": "ignored", "reason": "a training job is already queued; it will use the latest data"}
+    task = _send("trainer.tasks.train_on_new_data", repo.get("name"), None, countdown=TRAIN_DEBOUNCE_S)
+    log.info("Training job %s queued for %s (starts in %ss, latest revision)", task.id, repo.get("name"),
+             TRAIN_DEBOUNCE_S)
+    return {"status": "training_queued", "job_id": task.id, "starts_in_s": TRAIN_DEBOUNCE_S}
+
+
+TRAIN_DEBOUNCE_S = 180
+
+
+def _claim_training_slot():
+    """True for the first webhook in a burst; False while a job from that burst is still pending."""
+    try:
+        import redis
+        r = redis.Redis.from_url(settings.result_backend, socket_timeout=2)
+        return bool(r.set("sigplatform:training-pending", "1", nx=True, ex=TRAIN_DEBOUNCE_S + 60))
+    except Exception as e:  # no Valkey available: never block training
+        log.warning("Webhook de-duplication unavailable (%s); queuing anyway", e)
+        return True
 
 
 @app.get("/v1/models")
